@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Cyclone Simulation</title>
+    
+    <!-- Leaflet CSS for map rendering -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+     integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+     crossorigin=""/>
+     
+    <!-- Tailwind CSS for styling UI elements -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background-color: #f0f4f8;
+        }
+        #map {
+            flex-grow: 1;
+            width: 100%;
+            border-radius: 0 0 0.5rem 0.5rem;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        /* Custom icon style for the moving storm marker */
+        .storm-icon {
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white" stroke="%23dc2626" stroke-width="1.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3c7.2 0 9 1.8 9 9s-1.8 9-9 9-9-1.8-9-9 1.8-9 9-9zm0 3c-4.97 0-9 4.03-9 9s4.03 9 9 9 9-4.03 9-9-4.03-9-9-9zm0 4.5a4.5 4.5 0 100 9 4.5 4.5 0 000-9z" transform="rotate(45 12 12)"/></svg>');
+            background-size: contain;
+            border-radius: 50%;
+            border: 2px solid #dc2626;
+            box-shadow: 0 0 10px rgba(220, 38, 38, 0.7);
+            transition: transform 0.1s linear;
+        }
+        /* Style for the select dropdown */
+        select {
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            appearance: none;
+            background-image: url('data:image/svg+xml;utf8,<svg fill="gray" height="24" viewBox="0 0 24 24" width="24" xmlns="http://www.w3.org/2000/svg"><path d="M7 10l5 5 5-5z"/><path d="M0 0h24v24H0z" fill="none"/></svg>');
+            background-repeat: no-repeat;
+            background-position-x: 100%;
+            background-position-y: 5px;
+        }
+    </style>
+</head>
+<body class="bg-slate-100">
+    <nav class="bg-blue-900 text-white p-4 shadow-lg">
+    <h1 class="text-xl font-bold">India Storm Analytics Hub</h1>
+</nav>
+
+    <!-- Header and Controls -->
+    <div class="bg-white p-4 shadow-md rounded-t-lg z-10">
+        <div class="max-w-7xl mx-auto flex flex-col md:flex-row items-center justify-between gap-4">
+            <h1 class="text-xl md:text-2xl font-bold text-slate-800">Cyclone Simulation</h1>
+            
+            <div class="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto">
+                <!-- Cyclone Selector -->
+                <div class="w-full sm:w-auto">
+                     <label for="cyclone-select" class="text-sm font-medium text-slate-600">Select a Cyclone:</label>
+                     <select id="cyclone-select" class="mt-1 block w-full md:w-64 pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md shadow-sm">
+                        <!-- Options will be populated by script -->
+                     </select>
+                </div>
+                <!-- Info Panel -->
+                <div id="info-panel" class="bg-slate-50 border border-slate-200 rounded-lg p-3 text-center w-full sm:w-auto">
+                    <p class="text-sm font-semibold text-slate-700" id="status-text">Select a cyclone to begin</p>
+                    <p class="text-lg font-bold text-blue-600" id="wind-speed-text">-</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Map Container -->
+    <div id="map"></div>
+
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+     integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+     crossorigin=""></script>
+
+    <script>
+        // --- 1. MAP INITIALIZATION ---
+        const map = L.map('map').setView([20.5937, 78.9629], 5); // Centered on India
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // --- 2. AUGMENTED CYCLONE DATA ---
+        const cycloneData = [
+            { event_name: "Cyclone Fani", state: "Odisha", lat: 19.8, lon: 85.8, wind: 215, pressure: 932, fatalities: 89, damage: 8300, origin_lat: 13.0, origin_lon: 88.0 },
+            { event_name: "Cyclone Nisarga", state: "Maharashtra", lat: 18.4, lon: 73.0, wind: 110, pressure: 984, fatalities: 6, damage: 130, origin_lat: 16.0, origin_lon: 70.0 },
+            { event_name: "Cyclone Amphan", state: "West Bengal", lat: 21.9, lon: 87.5, wind: 240, pressure: 925, fatalities: 118, damage: 13000, origin_lat: 14.0, origin_lon: 88.5 },
+            { event_name: "Cyclone Tauktae", state: "Gujarat", lat: 20.8, lon: 71.2, wind: 185, pressure: 950, fatalities: 198, damage: 2100, origin_lat: 12.0, origin_lon: 72.0 },
+            { event_name: "Cyclone Yaas", state: "Odisha", lat: 21.6, lon: 87.1, wind: 140, pressure: 970, fatalities: 20, damage: 320, origin_lat: 17.0, origin_lon: 89.0 },
+            { event_name: "Cyclone Biparjoy", state: "Gujarat", lat: 22.7, lon: 69.4, wind: 155, pressure: 964, fatalities: 2, damage: 120, origin_lat: 13.0, origin_lon: 66.0 },
+            { event_name: "Cyclone Michaung", state: "Andhra Pradesh", lat: 15.9, lon: 80.3, wind: 110, pressure: 988, fatalities: 12, damage: 1300, origin_lat: 11.0, origin_lon: 85.0 },
+            { event_name: "Cyclone Remal", state: "West Bengal", lat: 21.7, lon: 89.2, wind: 135, pressure: 978, fatalities: 38, damage: 650, origin_lat: 18.0, origin_lon: 89.5 }
+        ];
+
+        // --- 3. UI, MAP ELEMENTS & STATE MANAGEMENT ---
+        const cycloneSelect = document.getElementById('cyclone-select');
+        const statusText = document.getElementById('status-text');
+        const windSpeedText = document.getElementById('wind-speed-text');
+        
+        let animationInterval = null;
+        let movingMarker = null;
+        let pathLine = null;
+        let landfallMarker = null;
+
+        const stormIcon = L.divIcon({
+            className: 'storm-icon',
+            iconSize: [30, 30]
+        });
+
+        // --- 4. FUNCTIONS ---
+
+        /**
+         * Populates the dropdown with cyclone names.
+         */
+        function populateSelector() {
+            cycloneSelect.innerHTML = '<option value="">-- Select a Cyclone --</option>';
+            cycloneData.forEach((cyclone, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `${cyclone.event_name} (${cyclone.state})`;
+                cycloneSelect.appendChild(option);
+            });
+        }
+
+        /**
+         * Clears any existing simulation artifacts from the map.
+         */
+        function resetSimulation() {
+            clearInterval(animationInterval);
+            if (movingMarker) map.removeLayer(movingMarker);
+            if (pathLine) map.removeLayer(pathLine);
+            if (landfallMarker) map.removeLayer(landfallMarker);
+            movingMarker = pathLine = landfallMarker = null;
+        }
+
+        /**
+         * Starts the animation for the selected cyclone.
+         * @param {string} index - The index of the cyclone from the dropdown.
+         */
+        function startSimulation(index) {
+            resetSimulation();
+
+            if (index === "" || index === null) {
+                statusText.textContent = 'Select a cyclone to begin';
+                windSpeedText.textContent = '-';
+                map.flyTo([20.5937, 78.9629], 5);
+                return;
+            }
+
+            const cyclone = cycloneData[index];
+            const origin = L.latLng(cyclone.origin_lat, cyclone.origin_lon);
+            const destination = L.latLng(cyclone.lat, cyclone.lon);
+
+            // Draw the full path as a dashed line
+            pathLine = L.polyline([origin, destination], { color: '#dc2626', weight: 3, opacity: 0.7, dashArray: '10, 10' }).addTo(map);
+            map.fitBounds(pathLine.getBounds(), { padding: [50, 50] });
+
+            // Initialize the moving marker
+            movingMarker = L.marker(origin, { icon: stormIcon }).addTo(map);
+            
+            let step = 0;
+            const totalSteps = 150; // Number of steps for the animation
+
+            statusText.textContent = `${cyclone.event_name} is forming...`;
+            windSpeedText.textContent = '0 km/h';
+            
+            animationInterval = setInterval(() => {
+                step++;
+                const progress = step / totalSteps;
+                
+                // Interpolate latitude and longitude
+                const currentLat = origin.lat + (destination.lat - origin.lat) * progress;
+                const currentLng = origin.lng + (destination.lng - origin.lng) * progress;
+                movingMarker.setLatLng([currentLat, currentLng]);
+
+                // Interpolate wind speed for display
+                const currentWind = Math.round(cyclone.wind * progress);
+                windSpeedText.textContent = `${currentWind} km/h`;
+                statusText.textContent = 'Approaching Landfall...';
+
+                // Rotate the icon
+                const iconElement = movingMarker.getElement();
+                if(iconElement) {
+                   iconElement.style.transform += ` rotate(${progress * 360 * 2}deg)`;
+                }
+
+                if (step >= totalSteps) {
+                    clearInterval(animationInterval);
+                    statusText.textContent = 'Landfall Complete!';
+                    windSpeedText.textContent = `${cyclone.wind} km/h`;
+
+                    // Create final marker with full data
+                    landfallMarker = L.marker(destination, { icon: stormIcon }).addTo(map);
+                    const popupContent = `
+                        <div class="text-base font-sans">
+                            <h3 class="font-bold text-lg mb-2">${cyclone.event_name}</h3>
+                            <p><strong>State:</strong> ${cyclone.state}</p>
+                            <p><strong>Max Wind Speed:</strong> ${cyclone.wind} km/h</p>
+                            <p><strong>Min Pressure:</strong> ${cyclone.pressure} mbar</p>
+                            <p><strong>Fatalities:</strong> ${cyclone.fatalities}</p>
+                            <p><strong>Damage:</strong> $${cyclone.damage} Million</p>
+                        </div>
+                    `;
+                    landfallMarker.bindPopup(popupContent).openPopup();
+                    if(movingMarker) map.removeLayer(movingMarker); // remove moving marker
+                }
+            }, 50); // Interval time in ms
+        }
+
+        // --- 5. INITIALIZATION & EVENT LISTENERS ---
+        populateSelector();
+        cycloneSelect.addEventListener('change', (event) => {
+            startSimulation(event.target.value);
+        });
+
+    </script>
+</body>
+</html>
